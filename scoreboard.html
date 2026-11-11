@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Live squad scoreboard and speech timer for 7AD Debate.">
+<title>7AD Debate Scoreboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@500;600;700&display=swap">
+<style>
+html, body { margin: 0; }
+/* Layout: one projected screen, six squad cards (3 × 2). Each card is a scorecard: big squad name and total, then one row per skill (skill name, tally, − and +), sized to read and click with a mouse from the back of the room. A Key screen lists what earns and loses points. */
+:root {
+  --bg: #F8F5FA;
+  --surface: #FFFFFF;
+  --surface-2: #F1EAF6;
+  --ink: #2A1630;
+  --muted: #5E5364;
+  --line: #DCD0E6;
+  --accent: #5A267F;
+  --accent-ink: #FFFFFF;
+  --heading: #50154A;
+  --plus: #1F6B47;
+  --plus-soft: #DDF0E5;
+  --minus: #A82F57;
+  --minus-soft: #F8E1E9;
+  --warn: #B26200;
+  --scrim: rgba(42, 22, 48, 0.55);
+  --font-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --font-body: "Barlow", "Segoe UI", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #150F19; --surface: #201827; --surface-2: #2A2032; --ink: #F3EDF6; --muted: #B3A8BA; --line: #3B2F44;
+    --accent: #C7A2E8; --accent-ink: #1D1024; --heading: #E7CFF5; --plus: #74D3A3; --plus-soft: #17352A;
+    --minus: #F28AAE; --minus-soft: #3D1A28; --warn: #F2B24C; --scrim: rgba(0, 0, 0, 0.62); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #150F19; --surface: #201827; --surface-2: #2A2032; --ink: #F3EDF6; --muted: #B3A8BA; --line: #3B2F44;
+  --accent: #C7A2E8; --accent-ink: #1D1024; --heading: #E7CFF5; --plus: #74D3A3; --plus-soft: #17352A;
+  --minus: #F28AAE; --minus-soft: #3D1A28; --warn: #F2B24C; --scrim: rgba(0, 0, 0, 0.62); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { height: 100%; }
+body {
+  min-height: 100%;
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 10px 12px;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.wrap { max-width: 1900px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+
+/* Header */
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; border-bottom: 3px solid var(--accent); padding-bottom: 8px; }
+.brand { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.brand h1 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: clamp(26px, 2.6vw, 40px); letter-spacing: 0.02em; color: var(--heading); line-height: 1; text-transform: uppercase; }
+.brand .date { color: var(--muted); font-size: 14px; letter-spacing: 0.04em; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.spacer { flex: 1; }
+.timer { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.seg { display: inline-flex; gap: 4px; }
+.clock { font-family: var(--font-display); font-weight: 800; font-size: clamp(40px, 4.4vw, 64px); line-height: 1; font-variant-numeric: tabular-nums; min-width: 3.4ch; text-align: right; color: var(--ink); }
+.clock.warn { color: var(--warn); }
+.clock.done { color: var(--minus); }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; min-height: 48px; padding: 8px 18px; font-weight: 600; font-size: 17px; }
+.chip:hover:not(:disabled) { border-color: var(--accent); }
+.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.chip.solid { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.chip.big { min-height: 56px; padding: 10px 24px; font-size: 20px; font-weight: 700; }
+.chip:disabled { opacity: .45; cursor: not-allowed; }
+#startBtn { min-width: 6.5em; }
+
+/* Where scores are saved */
+.sync { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0.02em; }
+.sync::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--line); flex: 0 0 auto; }
+
+/* Squad cards */
+.board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 900px) { .board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .board { grid-template-columns: minmax(0, 1fr); } }
+.squad {
+  container-type: inline-size;
+  background: var(--surface); border: 2px solid var(--line); border-radius: 14px;
+  padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0;
+}
+.shead { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; align-items: start; padding-inline: 4px; }
+.shead .name { font-family: var(--font-display); font-weight: 800; font-size: clamp(28px, 9cqi, 56px); letter-spacing: 0.02em; color: var(--heading); text-transform: uppercase; line-height: 1; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.shead .lead { font-family: var(--font-body); font-size: clamp(12px, 2.6cqi, 17px); font-weight: 700; color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 3px 10px; letter-spacing: 0.06em; }
+.shead .members { grid-column: 1; color: var(--ink); font-size: clamp(14px, 3.5cqi, 21px); font-weight: 600; line-height: 1.25; min-width: 0; }
+.shead .total { grid-column: 2; grid-row: 1 / span 2; font-family: var(--font-display); font-weight: 800; font-size: clamp(56px, 18cqi, 112px); line-height: .82; font-variant-numeric: tabular-nums; color: var(--ink); }
+.shead .total.neg { color: var(--minus); }
+
+/* One row per skill: name | tally | − | + */
+.skills { flex: 1 1 auto; display: grid; grid-template-rows: repeat(5, minmax(0, 1fr)); gap: 6px; min-height: 0; }
+.sk {
+  display: grid; grid-template-columns: minmax(0, 1fr) 11cqi 18cqi 26cqi; gap: 6px; align-items: stretch;
+  background: var(--surface-2); border-radius: 10px; padding: 4px; min-width: 0; min-height: 46px;
+}
+.sk .lab { align-self: center; padding-left: 8px; font-family: var(--font-display); font-weight: 700; font-size: clamp(17px, 5cqi, 30px); line-height: 1.05; color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
+.sk .val { align-self: center; text-align: right; font-family: var(--font-display); font-weight: 800; font-size: clamp(22px, 6.6cqi, 42px); line-height: 1; font-variant-numeric: tabular-nums; }
+.sk .val.neg { color: var(--minus); }
+.sk .bplus, .sk .bminus {
+  border: 0; border-radius: 8px; font-family: var(--font-display); font-weight: 800; line-height: 1; padding: 0;
+  display: flex; align-items: center; justify-content: center; transition: background .1s, color .1s;
+}
+.sk .bplus { background: var(--plus-soft); color: var(--plus); font-size: clamp(28px, 8cqi, 50px); }
+.sk .bminus { background: var(--minus-soft); color: var(--minus); font-size: clamp(26px, 7.4cqi, 46px); }
+.sk .bplus:hover:not(:disabled), .sk .bplus:focus-visible { background: var(--plus); color: var(--surface); }
+.sk .bminus:hover:not(:disabled), .sk .bminus:focus-visible { background: var(--minus); color: var(--surface); }
+.sk .bplus:active:not(:disabled), .sk .bminus:active:not(:disabled) { transform: scale(.96); }
+.sk button:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Point feedback */
+.squad.flash-plus { animation: fp .8s ease-out; }
+.squad.flash-minus { animation: fm .8s ease-out; }
+.sk.flash-plus { animation: tp .8s ease-out; }
+.sk.flash-minus { animation: tm .8s ease-out; }
+@keyframes fp { 0% { border-color: var(--plus); background: var(--plus-soft); } 100% { border-color: var(--line); background: var(--surface); } }
+@keyframes fm { 0% { border-color: var(--minus); background: var(--minus-soft); } 100% { border-color: var(--line); background: var(--surface); } }
+@keyframes tp { 0% { box-shadow: inset 0 0 0 3px var(--plus); } 100% { box-shadow: inset 0 0 0 3px transparent; } }
+@keyframes tm { 0% { box-shadow: inset 0 0 0 3px var(--minus); } 100% { box-shadow: inset 0 0 0 3px transparent; } }
+@media (prefers-reduced-motion: reduce) { .squad.flash-plus, .squad.flash-minus, .sk.flash-plus, .sk.flash-minus { animation: none; } }
+
+/* Bottom bar */
+.tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.bar .last { font-size: 18px; color: var(--muted); min-width: 0; }
+.last .p { color: var(--plus); font-weight: 800; }
+.last .m { color: var(--minus); font-weight: 800; }
+.bar .msg { color: var(--muted); font-size: 16px; min-width: 0; }
+.danger { border-color: var(--minus) !important; color: var(--minus); }
+.danger.armed { background: var(--minus); color: var(--surface); }
+
+/* One screen on a projector or laptop: everything fits without scrolling */
+@media (min-width: 900px) and (min-height: 700px) {
+  body { height: 100%; }
+  .wrap { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+  .board { grid-template-rows: repeat(2, minmax(0, 1fr)); min-height: 0; }
+}
+
+/* Overlays: Key, squad editor, copy fallback */
+.overlay {
+  position: fixed; inset: 0; z-index: 20; background: var(--scrim); display: flex; align-items: center; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+.sheet { background: var(--surface); color: var(--ink); border-radius: 16px; width: min(760px, 100%); max-height: 100%; overflow: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25); }
+.sheet.wide { width: min(1800px, 100%); padding: 22px 28px; gap: 16px; }
+.sheet-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.sheet-head h2 { margin: 0; flex: 1; min-width: 0; font-family: var(--font-display); font-weight: 800; font-size: clamp(28px, 3.4vw, 52px); text-transform: uppercase; letter-spacing: 0.02em; color: var(--heading); line-height: 1; text-wrap: balance; }
+.sheet label { font-weight: 700; font-size: 16px; }
+.sheet textarea { width: 100%; min-height: 170px; font: 16px/1.4 var(--font-body); color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.sheet textarea.mono { font: 13px/1.4 ui-monospace, Consolas, monospace; min-height: 140px; }
+.sheet .msg { color: var(--muted); font-size: 15px; }
+.keylead { margin: 0; font-size: clamp(18px, 1.7vw, 26px); color: var(--muted); }
+.keylead .p { color: var(--plus); font-weight: 800; }
+.keylead .m { color: var(--minus); font-weight: 800; }
+.keygrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 1100px) { .keygrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .keygrid { grid-template-columns: minmax(0, 1fr); } }
+.kcol { background: var(--surface-2); border-radius: 12px; padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.kcol h3 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: clamp(26px, 2.4vw, 40px); text-transform: uppercase; letter-spacing: 0.02em; color: var(--heading); line-height: 1; }
+.kcol .ktag { margin: -4px 0 0; color: var(--muted); font-size: clamp(15px, 1.3vw, 20px); font-weight: 600; }
+.kcol ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.kcol li { display: flex; gap: 10px; align-items: baseline; font-size: clamp(17px, 1.55vw, 26px); line-height: 1.2; }
+.kcol li.minus { border-top: 1px dashed var(--line); padding-top: 8px; }
+.kcol .sign { flex: 0 0 auto; font-family: var(--font-display); font-weight: 800; font-size: 1.25em; width: 1em; text-align: center; }
+.kcol .sign.p { color: var(--plus); }
+.kcol .sign.m { color: var(--minus); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>7AD Debate Scoreboard</h1>
+      <span class="date"><span id="today"></span><span class="sync" id="sync">Saved in this browser</span></span>
+    </div>
+    <div class="spacer"></div>
+    <div class="timer" aria-label="Speech timer">
+      <span class="seg">
+        <button class="chip" type="button" id="len60" aria-pressed="true">60 s</button>
+        <button class="chip" type="button" id="len90" aria-pressed="false">90 s</button>
+      </span>
+      <span class="clock" id="clock" aria-live="off">1:00</span>
+      <button class="chip solid big" type="button" id="startBtn">Start</button>
+      <button class="chip big" type="button" id="resetBtn">Reset</button>
+      <button class="chip" type="button" id="soundBtn" aria-pressed="true">Sound on</button>
+      <button class="chip" type="button" id="fullBtn">Full screen</button>
+    </div>
+  </header>
+
+  <section class="board" id="board" aria-label="Squads"></section>
+
+  <footer class="tools bar" aria-label="Board tools">
+    <button class="chip big" type="button" id="undoBtn">Undo last point</button>
+    <span class="last" id="lastAll">No points yet</span>
+    <span class="spacer"></span>
+    <span class="msg" id="toolMsg" role="status"></span>
+    <button class="chip big" type="button" id="keyBtn" aria-haspopup="dialog">Key</button>
+    <button class="chip" type="button" id="copyBtn">Copy scores</button>
+    <button class="chip" type="button" id="editBtn" aria-haspopup="dialog">Edit squads</button>
+    <button class="chip danger" type="button" id="newBtn">New debate: clear scores</button>
+  </footer>
+</div>
+
+<!-- KEY: what earns and loses points -->
+<div class="overlay" id="keyView" hidden role="dialog" aria-modal="true" aria-labelledby="keyTitle">
+  <div class="sheet wide">
+    <div class="sheet-head">
+      <h2 id="keyTitle">How squads score</h2>
+      <button class="chip solid big" type="button" id="keyClose">Back to scores</button>
+    </div>
+    <p class="keylead"><span class="p">+1</span> for good debating in any of the five skills. <span class="m">−1</span> for poor conduct.</p>
+    <div class="keygrid" id="keyGrid"></div>
+  </div>
+</div>
+
+<!-- SQUAD EDITOR -->
+<div class="overlay" id="squadView" hidden role="dialog" aria-modal="true" aria-labelledby="squadTitle">
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="squadTitle">Edit squads</h2></div>
+    <label for="squadText">Six lines, one per squad: Squad name: student names separated by commas</label>
+    <textarea id="squadText"></textarea>
+    <div class="tools">
+      <button class="chip solid big" type="button" id="saveSquads">Save squads</button>
+      <button class="chip" type="button" id="cancelSquads">Cancel</button>
+      <span class="msg" id="squadMsg" role="status"></span>
+    </div>
+  </div>
+</div>
+
+<!-- COPY FALLBACK -->
+<div class="overlay" id="copyView" hidden role="dialog" aria-modal="true" aria-labelledby="copyTitle">
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="copyTitle">Today’s scores</h2></div>
+    <label for="copyBox">Copying was blocked here. The scores are selected: press Ctrl+C, then paste into your sheet.</label>
+    <textarea class="mono" id="copyBox" readonly></textarea>
+    <div class="tools"><button class="chip big" type="button" id="copyClose">Close</button></div>
+  </div>
+</div>
+<div class="sr" aria-live="polite" id="announce"></div>
+
+<script>
+(function () {
+  const LOCAL_KEY = 'debate-scoreboard-7ad-v3';   // squads, scores and timer, kept in this browser
+  const UI_KEY = 'debate-scoreboard-7ad-ui';       // this device's sound choice
+
+  // The five tracked skills. The board scores at skill level (+1 or −1 per click).
+  // The subskills are listed on the Key screen as what earns a point, and the conduct items as what loses one.
+  const SKILLS = [
+    { n: 1, name: 'Argument', tag: 'Make sense', subs: [
+      ['1.1', 'Claim and reason'], ['1.2', 'Example and evidence'], ['1.3', 'Why it matters'], ['1.4', 'Comparing'] ] },
+    { n: 2, name: 'Response', tag: 'Answer back', subs: [
+      ['2.1', 'Great listening', 'Talking over'], ['2.2', 'Fair summary'], ['2.3', 'Rebut and rebuild'], ['2.4', 'POIs'] ] },
+    { n: 3, name: 'Persuasion', tag: 'Win the room', subs: [
+      ['3.1', 'Real example'], ['3.2', 'Audience and values'], ['3.3', 'Memorable line'], ['3.4', 'Respectful', 'Disrespect'] ] },
+    { n: 4, name: 'Delivery', tag: 'Speak well', subs: [
+      ['4.1', 'Be heard'], ['4.2', 'Body'], ['4.3', 'Notes, not script'], ['4.4', 'Recover'] ] },
+    { n: 5, name: 'WSDC Strategy', tag: 'Play the game', subs: [
+      ['5.1', 'Did the job'], ['5.2', 'Focused squad', 'Off task'], ['5.3', 'Good sport', 'Complaining'] ] },
+  ];
+  const SKILL_CODES = SKILLS.map(s => String(s.n));
+  const SUB_CODES = SKILLS.flatMap(s => s.subs.map(x => x[0]));
+  const LABEL = {};
+  SKILLS.forEach(s => s.subs.forEach(([c, p, m]) => { LABEL[c + '+'] = p; if (m) LABEL[c + '-'] = m; }));
+  function labelFor(code, d) {
+    if (SKILL_CODES.includes(code)) return SKILLS[Number(code) - 1].name;
+    return LABEL[code + (d > 0 ? '+' : '-')] || '';   // points given with the earlier subskill buttons still count
+  }
+  const placeholderTeams = () => [1, 2, 3, 4, 5, 6].map(n => ({ name: 'Squad ' + n, members: [] }));
+
+  // ---------- State ----------
+  const S = {
+    teams: placeholderTeams(),
+    events: [],
+    timer: { len: 60, running: false, endsAt: 0, remainingMs: 60000, runId: 0 },
+  };
+  const ui = loadUi();
+  let flashReq = null;
+  let lastClick = { key: '', at: 0 };
+  let msgTimer = null, returnFocus = null;
+  const cards = [], tiles = [];
+
+  const $ = id => document.getElementById(id);
+  const fmtSigned = v => (v > 0 ? '+' + v : v < 0 ? '−' + Math.abs(v) : '0');
+  const fmtTotal = v => (v < 0 ? '−' + Math.abs(v) : String(v));
+  function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+  function loadUi() {
+    let u = {};
+    try { u = JSON.parse(localStorage.getItem(UI_KEY) || '{}') || {}; } catch (e) { u = {}; }
+    return { sound: typeof u.sound === 'boolean' ? u.sound : true };
+  }
+  function saveUi() { try { localStorage.setItem(UI_KEY, JSON.stringify({ sound: ui.sound })); } catch (e) { /* not kept on this device */ } }
+
+  // ---------- Checking what this browser hands back ----------
+  function cleanTeams(v) {
+    if (!Array.isArray(v) || v.length !== 6) return null;
+    return v.map((t, i) => {
+      let name = (t && typeof t.name === 'string' && t.name.trim()) ? t.name.trim().slice(0, 40) : 'Squad ' + (i + 1);
+      name = name.replace(/^team(\s*\d+)$/i, 'Squad$1');   // squads saved under the old "Team 1" names
+      return {
+        name,
+        members: Array.isArray(t && t.members) ? t.members.filter(m => typeof m === 'string').map(m => m.slice(0, 60)).slice(0, 8) : [],
+      };
+    });
+  }
+  function cleanEvent(e) {
+    if (!e) return null;
+    const team = Number(e.team), d = Number(e.d);
+    if (!Number.isInteger(team) || team < 0 || team > 5) return null;
+    if (d !== 1 && d !== -1) return null;
+    if (!SKILL_CODES.includes(e.code) && !SUB_CODES.includes(e.code)) return null;
+    const label = labelFor(e.code, d);
+    if (!label) return null;
+    return { id: e.id, team, code: e.code, label, d, at: Number(e.at) || 0 };
+  }
+  function cleanTimer(t) {
+    const len = t && Number(t.len) === 90 ? 90 : 60;
+    let rem = Number(t && t.remainingMs);
+    if (!Number.isFinite(rem) || rem < 0) rem = len * 1000;
+    return {
+      len, running: !!(t && t.running), endsAt: Number(t && t.endsAt) || 0,
+      remainingMs: Math.min(rem, len * 1000), runId: Number(t && t.runId) || 0,
+    };
+  }
+  const skillIndex = code => Number(String(code)[0]) - 1;
+
+  // ---------- Saved in this browser (localStorage) ----------
+  function loadLocal() {
+    try {
+      const raw = localStorage.getItem(LOCAL_KEY); if (!raw) return null;
+      const s = JSON.parse(raw);
+      const teams = cleanTeams(s.teams);
+      if (!teams || !Array.isArray(s.log)) return null;
+      const log = s.log.map(e => cleanEvent(e)).filter(Boolean);
+      const timer = cleanTimer(s.timer || { len: s.speech });
+      timer.running = false; timer.remainingMs = timer.len * 1000;
+      return { teams, log, timer };
+    } catch (e) { return null; }
+  }
+  function saveLocal() {
+    try {
+      localStorage.setItem(LOCAL_KEY, JSON.stringify({
+        teams: S.teams, speech: S.timer.len, timer: S.timer,
+        log: S.events.map(({ team, code, label, d, at }) => ({ team, code, label, d, at })),
+      }));
+    } catch (e) { /* storage unavailable: the board still works until the page closes */ }
+  }
+
+  // ---------- Scores ----------
+  function totals() {
+    const t = S.teams.map(() => ({ total: 0, skill: [0, 0, 0, 0, 0] }));
+    for (const e of S.events) {
+      const row = t[e.team]; if (!row) continue;
+      const k = skillIndex(e.code);
+      row.total += e.d; if (k >= 0 && k < 5) row.skill[k] += e.d;
+    }
+    return t;
+  }
+
+  // ---------- Actions ----------
+  function award(team, k, d) {
+    const now = Date.now(), key = team + ':' + k + ':' + d;
+    if (lastClick.key === key && now - lastClick.at < 250) return;   // a mouse double-click counts once
+    lastClick = { key, at: now };
+    const code = SKILL_CODES[k], label = SKILLS[k].name;
+    $('announce').textContent = `${S.teams[team].name}: ${d > 0 ? 'plus one' : 'minus one'}, ${label}`;
+    S.events.push({ team, code, label, d, at: now });
+    flashReq = { team, k, d, at: now };
+    saveLocal(); render();
+  }
+  function undo() {
+    const e = S.events[S.events.length - 1];
+    if (!e) { msg('Nothing to undo.'); return; }
+    const done = `Undone: ${e.d > 0 ? '+1' : '−1'} ${e.label}, ${S.teams[e.team].name}.`;
+    S.events.pop(); saveLocal(); render(); msg(done);
+  }
+  function clearScores() {
+    S.events = []; saveLocal(); render(); msg('Scores cleared. Squads kept.');
+  }
+  function msg(t) {
+    $('toolMsg').textContent = t;
+    clearTimeout(msgTimer);
+    msgTimer = setTimeout(() => { $('toolMsg').textContent = ''; }, 6000);
+  }
+
+  function armed(btn, run) {
+    const label = btn.textContent; let timer = null;
+    btn.addEventListener('click', () => {
+      if (!btn.classList.contains('armed')) {
+        btn.classList.add('armed'); btn.textContent = 'Click again to clear all scores';
+        clearTimeout(timer); timer = setTimeout(reset, 4000); return;
+      }
+      reset(); run();
+    });
+    function reset() { clearTimeout(timer); btn.classList.remove('armed'); btn.textContent = label; }
+  }
+
+  function summaryText() {
+    const t = totals();
+    const date = new Date().toISOString().slice(0, 10);
+    const lines = [['Date', 'Squad', 'Total', ...SKILLS.map(s => s.name)].join('\t')];
+    S.teams.forEach((team, i) => lines.push([date, team.name, t[i].total, ...t[i].skill].join('\t')));
+    return lines.join('\n');
+  }
+  function copySummary() {
+    const text = summaryText();
+    const fallback = () => { openOverlay('copyView'); const box = $('copyBox'); box.value = text; box.focus(); box.select(); };
+    try {
+      navigator.clipboard.writeText(text).then(() => msg('Copied: one row per squad, with the five skill totals.'), fallback);
+    } catch (e) { fallback(); }
+  }
+
+  // ---------- Overlays ----------
+  function openOverlay(id) {
+    returnFocus = document.activeElement;
+    $(id).hidden = false;
+    const f = $(id).querySelector('textarea:not([readonly]), .chip.solid, .chip');
+    if (f) f.focus();
+  }
+  function closeOverlay(id) {
+    if ($(id).hidden) return;
+    $(id).hidden = true;
+    if (returnFocus && document.contains(returnFocus) && !returnFocus.closest('[hidden]')) returnFocus.focus();
+  }
+  const openId = () => ['squadView', 'copyView', 'keyView'].find(id => !$(id).hidden) || null;
+  function toggleKey() { if ($('keyView').hidden) openOverlay('keyView'); else closeOverlay('keyView'); }
+  function openEditor() {
+    $('squadText').value = S.teams.map(t => `${t.name}: ${t.members.join(', ')}`).join('\n');
+    $('squadMsg').textContent = '';
+    openOverlay('squadView');
+  }
+  function saveSquads() {
+    const lines = $('squadText').value.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length !== 6) { $('squadMsg').textContent = `There must be exactly 6 lines (found ${lines.length}).`; return; }
+    const teams = cleanTeams(lines.map((l, i) => {
+      const k = l.indexOf(':');
+      const name = (k > -1 ? l.slice(0, k) : 'Squad ' + (i + 1)).trim();
+      const members = (k > -1 ? l.slice(k + 1) : l).split(',').map(s => s.trim()).filter(Boolean);
+      return { name, members };
+    }));
+    S.teams = teams; saveLocal(); render(); closeOverlay('squadView'); msg('Squads saved.');
+  }
+
+  // ---------- Timer ----------
+  const leftMs = () => (S.timer.running ? Math.max(0, S.timer.endsAt - Date.now()) : S.timer.remainingMs);
+  const ticking = () => S.timer.running && leftMs() > 0;
+  function commitTimer(t) {
+    S.timer = t; drawTimer(); saveLocal();
+  }
+  function startPause() {
+    const t = S.timer;
+    if (ticking()) { commitTimer(Object.assign({}, t, { running: false, remainingMs: leftMs() })); return; }
+    unlockAudio();
+    const rem = (!t.running && t.remainingMs > 0) ? t.remainingMs : t.len * 1000;
+    try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => {}); } catch (e) {}
+    commitTimer({ len: t.len, running: true, endsAt: Date.now() + rem, remainingMs: rem, runId: t.runId + 1 });
+  }
+  function resetTimer() { const t = S.timer; commitTimer({ len: t.len, running: false, endsAt: 0, remainingMs: t.len * 1000, runId: t.runId + 1 }); }
+  function setLen(sec) { commitTimer({ len: sec, running: false, endsAt: 0, remainingMs: sec * 1000, runId: S.timer.runId + 1 }); }
+
+  let shown = '', lastKey = null, lastLeft = null;
+  function drawTimer() {
+    const left = leftMs();
+    let text, cls = 'clock';
+    if (S.timer.running && left <= 0) { text = 'TIME'; cls += ' done'; }
+    else {
+      const s = Math.ceil(left / 1000), m = Math.floor(s / 60);
+      text = `${m}:${String(s % 60).padStart(2, '0')}`;
+      if (S.timer.running && s <= 15) cls += ' warn';
+    }
+    const key = text + cls;
+    if (key !== shown) { shown = key; const c = $('clock'); c.textContent = text; c.className = cls; }
+    $('startBtn').textContent = ticking() ? 'Pause' : 'Start';
+    const is60 = S.timer.len === 60;
+    $('len60').setAttribute('aria-pressed', String(is60));
+    $('len90').setAttribute('aria-pressed', String(!is60));
+  }
+  function tick() {
+    const left = leftMs(), key = S.timer.runId + ':' + S.timer.endsAt;
+    if (key !== lastKey) { lastKey = key; lastLeft = left; }
+    else if (S.timer.running) {
+      if (lastLeft > 15000 && left <= 15000 && left > 0) beep(1);
+      if (lastLeft > 0 && left <= 0) beep(2);
+      lastLeft = left;
+    }
+    drawTimer();
+  }
+
+  // ---------- Sound (needs one click on the page first) ----------
+  let audio = null;
+  function unlockAudio() {
+    if (!ui.sound) return;
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state === 'suspended') audio.resume().catch(() => {});
+    } catch (e) { audio = null; }
+  }
+  function beep(times) {
+    if (!ui.sound) return;
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audio.currentTime;
+      for (let k = 0; k < times; k++) {
+        const o = audio.createOscillator(), g = audio.createGain();
+        o.type = 'sine'; o.frequency.value = times > 1 ? 660 : 880;
+        g.gain.setValueAtTime(0.0001, t0 + k * 0.32);
+        g.gain.exponentialRampToValueAtTime(0.25, t0 + k * 0.32 + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + k * 0.32 + 0.25);
+        o.connect(g).connect(audio.destination);
+        o.start(t0 + k * 0.32); o.stop(t0 + k * 0.32 + 0.27);
+      }
+    } catch (e) { /* no audio: the clock still turns red */ }
+  }
+  function drawSound() {
+    $('soundBtn').textContent = ui.sound ? 'Sound on' : 'Sound off';
+    $('soundBtn').setAttribute('aria-pressed', String(ui.sound));
+  }
+  function toggleSound() { ui.sound = !ui.sound; saveUi(); drawSound(); if (ui.sound) unlockAudio(); }
+
+  // ---------- Build (once) ----------
+  function scoreBtn(cls, glyph, onClick) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = cls; b.textContent = glyph;
+    b.addEventListener('click', e => { if (e.detail > 0) b.blur(); onClick(); });
+    return b;
+  }
+  function buildBoard() {
+    const board = $('board'); board.innerHTML = '';
+    for (let i = 0; i < 6; i++) {
+      const card = document.createElement('section');
+      card.className = 'squad'; card.setAttribute('aria-labelledby', 'sqname' + i);
+      card.innerHTML = `
+        <div class="shead">
+          <span class="name" id="sqname${i}"><span class="nm">Squad ${i + 1}</span><span class="lead" hidden>Leading</span></span>
+          <span class="total">0</span>
+          <span class="members"></span>
+        </div>
+        <div class="skills"></div>`;
+      const box = card.querySelector('.skills');
+      tiles[i] = [];
+      SKILLS.forEach((sk, k) => {
+        const t = document.createElement('div');
+        t.className = 'sk';
+        t.innerHTML = `<span class="lab">${esc(sk.name)}</span><span class="val">0</span>`;
+        t.append(scoreBtn('bminus', '−', () => award(i, k, -1)), scoreBtn('bplus', '+', () => award(i, k, 1)));
+        box.appendChild(t);
+        tiles[i][k] = t;
+      });
+      board.appendChild(card);
+      cards[i] = card;
+    }
+  }
+  function buildKey() {
+    $('keyGrid').innerHTML = SKILLS.map(s => {
+      const plus = s.subs.map(x => `<li><span class="sign p">+</span><span>${esc(x[1])}</span></li>`).join('');
+      const minus = s.subs.filter(x => x[2]).map(x => `<li class="minus"><span class="sign m">−</span><span>${esc(x[2])}</span></li>`).join('');
+      return `<section class="kcol"><h3>${s.n} ${esc(s.name)}</h3><p class="ktag">${esc(s.tag)}</p><ul>${plus}${minus}</ul></section>`;
+    }).join('');
+  }
+
+  // ---------- Render ----------
+  function render() {
+    const t = totals();
+    const max = Math.max(...t.map(x => x.total));
+    const anyPoints = S.events.length > 0;
+    S.teams.forEach((team, i) => {
+      const c = cards[i], s = t[i];
+      c.querySelector('.nm').textContent = team.name;
+      c.querySelector('.lead').hidden = !(anyPoints && s.total === max && max > 0);
+      const tot = c.querySelector('.total');
+      tot.textContent = fmtTotal(s.total); tot.classList.toggle('neg', s.total < 0);
+      c.querySelector('.members').textContent = team.members.join(' · ');
+      SKILLS.forEach((sk, k) => {
+        const tile = tiles[i][k], v = tile.querySelector('.val');
+        v.textContent = fmtSigned(s.skill[k]); v.classList.toggle('neg', s.skill[k] < 0);
+        tile.querySelector('.bplus').setAttribute('aria-label', `${team.name}: plus one for ${sk.name}`);
+        tile.querySelector('.bminus').setAttribute('aria-label', `${team.name}: minus one for ${sk.name}`);
+      });
+    });
+    const last = S.events[S.events.length - 1];
+    $('lastAll').innerHTML = last
+      ? `Last: <span class="${last.d > 0 ? 'p' : 'm'}">${last.d > 0 ? '+1' : '−1'}</span> ${esc(last.label)}, ${esc(S.teams[last.team].name)}`
+      : 'No points yet';
+    applyFlash();
+    drawTimer();
+  }
+  function applyFlash() {
+    const f = flashReq; flashReq = null;
+    if (!f || Date.now() - f.at > 1500 || !cards[f.team]) return;
+    const cls = f.d > 0 ? 'flash-plus' : 'flash-minus';
+    const els = [cards[f.team]];
+    if (tiles[f.team] && tiles[f.team][f.k]) els.push(tiles[f.team][f.k]);
+    for (const el of els) { el.classList.remove('flash-plus', 'flash-minus'); void el.offsetWidth; el.classList.add(cls); }
+  }
+
+  // ---------- Wiring ----------
+  $('today').textContent = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  buildBoard(); buildKey();
+  for (const [id, fn] of [
+    ['len60', () => setLen(60)], ['len90', () => setLen(90)],
+    ['startBtn', startPause], ['resetBtn', resetTimer],
+    ['undoBtn', undo], ['copyBtn', copySummary],
+    ['editBtn', openEditor], ['cancelSquads', () => closeOverlay('squadView')], ['saveSquads', saveSquads],
+    ['keyBtn', toggleKey], ['keyClose', () => closeOverlay('keyView')], ['copyClose', () => closeOverlay('copyView')],
+    ['soundBtn', toggleSound],
+  ]) $(id).addEventListener('click', fn);
+  // A click on the dimmed edge closes the Key screen (quick with a mouse from the back).
+  $('keyView').addEventListener('click', e => { if (e.target === $('keyView')) closeOverlay('keyView'); });
+  $('copyView').addEventListener('click', e => { if (e.target === $('copyView')) closeOverlay('copyView'); });
+  armed($('newBtn'), clearScores);
+  $('fullBtn').addEventListener('click', () => {
+    unlockAudio();
+    try {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+    } catch (e) { /* full screen not available here */ }
+  });
+  document.addEventListener('pointerdown', unlockAudio);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { const o = openId(); if (o) closeOverlay(o); return; }
+    if (e.target.closest && e.target.closest('textarea, input')) return;
+    if (openId() && openId() !== 'keyView') return;
+    if (e.key === 'k' || e.key === 'K') { toggleKey(); return; }
+    if (e.key === 'z' || e.key === 'Z') { undo(); return; }
+    if (e.key === ' ') { e.preventDefault(); if (!e.repeat) startPause(); return; }
+    if (e.key === 'r' || e.key === 'R') { resetTimer(); return; }
+  });
+  // Space is the timer key, so it never re-presses the + or − button that was clicked last.
+  document.addEventListener('keyup', e => {
+    if (e.key === ' ' && !openId() && e.target.closest && e.target.closest('button')) e.preventDefault();
+  });
+
+  const saved = loadLocal();
+  if (saved) { S.teams = saved.teams; S.events = saved.log; S.timer = saved.timer; }
+  drawSound();
+  render();
+  setInterval(tick, 200);
+})();
+</script>
+
+</body></html>
