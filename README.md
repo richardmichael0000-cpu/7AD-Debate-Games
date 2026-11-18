@@ -6,7 +6,7 @@ Classroom-ready HTML tools for the Grade 7 debate class (7AD).
 
 | Tool | Use | Link |
 | --- | --- | --- |
-| Debate Scoreboard | Live squad points for the five debate skills, plus a 60/90-second speech timer | [scoreboard.html](scoreboard.html) |
+| Debate Scoreboard | Live squad points for the five debate skills, plus a 60/90/120-second speech timer | [scoreboard.html](scoreboard.html) |
 
 ## Debate Scoreboard
 
