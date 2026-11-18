@@ -185,6 +185,7 @@ button:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent);
       <span class="seg">
         <button class="chip" type="button" id="len60" aria-pressed="true">60 s</button>
         <button class="chip" type="button" id="len90" aria-pressed="false">90 s</button>
+        <button class="chip" type="button" id="len120" aria-pressed="false">120 s</button>
       </span>
       <span class="clock" id="clock" aria-live="off">1:00</span>
       <button class="chip solid big" type="button" id="startBtn">Start</button>
@@ -321,7 +322,7 @@ button:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent);
     return { id: e.id, team, code: e.code, label, d, at: Number(e.at) || 0 };
   }
   function cleanTimer(t) {
-    const len = t && Number(t.len) === 90 ? 90 : 60;
+    const len = [60, 90, 120].includes(Number(t && t.len)) ? Number(t.len) : 60;
     let rem = Number(t && t.remainingMs);
     if (!Number.isFinite(rem) || rem < 0) rem = len * 1000;
     return {
@@ -478,9 +479,7 @@ button:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent);
     const key = text + cls;
     if (key !== shown) { shown = key; const c = $('clock'); c.textContent = text; c.className = cls; }
     $('startBtn').textContent = ticking() ? 'Pause' : 'Start';
-    const is60 = S.timer.len === 60;
-    $('len60').setAttribute('aria-pressed', String(is60));
-    $('len90').setAttribute('aria-pressed', String(!is60));
+    [60, 90, 120].forEach(n => $('len' + n).setAttribute('aria-pressed', String(S.timer.len === n)));
   }
   function tick() {
     const left = leftMs(), key = S.timer.runId + ':' + S.timer.endsAt;
@@ -604,7 +603,7 @@ button:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent);
   $('today').textContent = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   buildBoard(); buildKey();
   for (const [id, fn] of [
-    ['len60', () => setLen(60)], ['len90', () => setLen(90)],
+    ['len60', () => setLen(60)], ['len90', () => setLen(90)], ['len120', () => setLen(120)],
     ['startBtn', startPause], ['resetBtn', resetTimer],
     ['undoBtn', undo], ['copyBtn', copySummary],
     ['editBtn', openEditor], ['cancelSquads', () => closeOverlay('squadView')], ['saveSquads', saveSquads],
